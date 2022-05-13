@@ -90,16 +90,19 @@ function ReStatus() {
         success: function (res) {
             if (res) {
                 if (res['Status'] < 100) {
-
                     progress = res['Process']
                     var p = Math.floor(res['FinishImg'] / res['Count'] * 100)
                     pb = document.getElementById('pb')
                     pb.innerText = p + '%'
                     pb.style.width = p + '%'
                     download_link = res['Download']
-                } else if (res['Status'] = 703) {
+                } else if (res['Status'] == 703) {
                     alert.innerHTML =
                         'Task can not be found. <a href="#" class="alert-link" onclick="ReInit()">Click to return.</a>'
+                    alert.style.display = ""
+                } else {
+                    ReInit()
+                    alert.innerHTML = res['StatusText']
                     alert.style.display = ""
                 }
             }

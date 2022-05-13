@@ -20,12 +20,16 @@ class Process:
             'Download': '#',
         }
         os.makedirs(tmp_path, exist_ok=True)
+        self.info = self._LoadInfo()
 
     def __call__(self):
-        info = self._LoadInfo()
-        self.status['Count'] = info['Count']
+
+        self.status['Count'] = self.info['Count']
         os.makedirs(os.path.join(self.tmp_path, self.handle), exist_ok=True)
         self._Process()
+        if self.status['Process'] == 'Failed':
+            print('Process Failed! handle:{}'.format(self.handle))
+            return False
         self._Pac()
         print('Process Done! handle:{}'.format(self.handle))
 

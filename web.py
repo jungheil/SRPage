@@ -19,7 +19,7 @@ from flask import (
     send_from_directory,
 )
 
-from process import Simulator
+from sr import SR
 
 app = Flask(__name__)
 
@@ -95,7 +95,7 @@ def upload():
         ret['StatusText'] = 'No images available'
         return jsonify(ret)
 
-    f = Simulator(task_handle, app.config['DATA_PATH'])
+    f = SR(task_handle, app.config['DATA_PATH'])
     pool.apply_async(f)
     ret = jsonify(ret)
     ret.set_cookie('TASKHANDLE', task_handle)
@@ -129,6 +129,9 @@ def status():
         ret['FinishImg'] = status['FinishImg']
         ret['Process'] = status['Process']
         ret['Download'] = status['Download']
+        if ret['Process'] == "Failed":
+            ret['Status'] = 704
+            ret['StatusText'] = 'Task failed.'
     else:
         ret['Status'] = 703
         ret['StatusText'] = 'Task not found.'
@@ -148,8 +151,8 @@ def favicon():
 
 if __name__ == '__main__':
     global pool
-    pool = Pool(processes=2)
-    os.makedirs(app.config['DATA_PATH'],exist_ok=True)
+    pool = Pool(processes=1)
+    os.makedirs(app.config['DATA_PATH'], exist_ok=True)
     app.run(host='0.0.0.0', debug=False, port=8888, threaded=True)
     pool.close()
     pool.join()
