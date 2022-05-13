@@ -56,7 +56,7 @@ network_g:
 
 # path
 path:
-  pretrain_network_g: experiments/models/TZ_X2_UW_0S.pth
+  pretrain_network_g: models/TZ_X2_UW_0S.pth
   strict_load_g: true
 
 # validation settings

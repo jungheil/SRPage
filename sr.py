@@ -1,5 +1,6 @@
 import glob
 import os
+from turtle import forward
 
 import imageio
 import torch
@@ -8,6 +9,16 @@ from basicsr.models import build_model
 from basicsr.utils.options import ordered_yaml
 
 from process import Process
+from enhancement import HazeRemoval
+
+
+def add_clear(fun):
+    def warp(*args, **kwargs):
+        ret = fun(*args, **kwargs)
+        torch.cuda.empty_cache()
+        return ret
+
+    return warp
 
 
 class PredData(torch.utils.data.Dataset):
@@ -48,9 +59,7 @@ class SR(Process):
         torch.cuda.empty_cache()
 
     def _LoadModel(self, info):
-        with open(
-            '/home/li/Git/BasicSR/options/test/TZ/test_TZ_x2_UW.yml', mode='r'
-        ) as f:
+        with open('arch/test_TZ_x2_UW.yml', mode='r') as f:
             self.opt = yaml.load(f, Loader=ordered_yaml()[0])
         self.opt['is_train'] = False
         self.opt['dist'] = False
@@ -58,6 +67,9 @@ class SR(Process):
 
     def _Process(self):
         self.status['Process'] = 'Working'
+
+        if self.info['opt']['enhancement']:
+            hr = HazeRemoval()
 
         try:
             self._LoadModel(self.info)
@@ -67,10 +79,17 @@ class SR(Process):
             )
 
             for i, img in enumerate(data):
-                out = self.model.net_g(img) * 255.0
+                if self.info['opt']['ensemble']:
+                    out = (
+                        self.forward_x8(img, forward_function=self.net_g.forward) * 255
+                    )
+                else:
+                    out = self.model.net_g(img) * 255.0
                 # out = out.type(torch.uint8)
                 out = out.squeeze(0).permute(1, 2, 0).detach().cpu().numpy()
                 torch.cuda.empty_cache()
+                if self.info['opt']['enhancement']:
+                    out = hr.get(out)
                 imageio.imwrite(
                     os.path.join(self.tmp_path, self.handle, data.get_img_name(i)), out
                 )
@@ -84,3 +103,53 @@ class SR(Process):
 
         finally:
             torch.cuda.empty_cache()
+
+    def forward_x8(self, *args, forward_function=None):
+        def _transform(v, op):
+            v = v.float()
+
+            v2np = v.data.cpu().numpy()
+            if op == 'v':
+                tfnp = v2np[:, :, :, ::-1].copy()
+            elif op == 'h':
+                tfnp = v2np[:, :, ::-1, :].copy()
+            elif op == 't':
+                tfnp = v2np.transpose((0, 1, 3, 2)).copy()
+
+            ret = torch.Tensor(tfnp).to(self.device)
+
+            return ret
+
+        list_x = []
+        for a in args:
+            x = [a]
+            for tf in 'v', 'h', 't':
+                x.extend([_transform(_x, tf) for _x in x])
+
+            list_x.append(x)
+
+        list_y = []
+        for x in zip(*list_x):
+            y = forward_function(*x)
+            if not isinstance(y, list):
+                y = [y]
+            if not list_y:
+                list_y = [[_y] for _y in y]
+            else:
+                for _list_y, _y in zip(list_y, y):
+                    _list_y.append(_y)
+
+        for _list_y in list_y:
+            for i in range(len(_list_y)):
+                if i > 3:
+                    _list_y[i] = _transform(_list_y[i], 't')
+                if i % 4 > 1:
+                    _list_y[i] = _transform(_list_y[i], 'h')
+                if (i % 4) % 2 == 1:
+                    _list_y[i] = _transform(_list_y[i], 'v')
+
+        y = [torch.cat(_y, dim=0).mean(dim=0, keepdim=True) for _y in list_y]
+        if len(y) == 1:
+            y = y[0]
+
+        return y
