@@ -75,10 +75,17 @@
               <input type="checkbox" class="btn-check" id="bntcheck-ensemble" name="ensemble" autocomplete="off">
               <label class="btn btn-outline-light btn-sm" for="bntcheck-ensemble">Self-Ensemble</label>
 
-              <input type="checkbox" class="btn-check" id="bntcheck-light" name="light" autocomplete="off" checked>
-              <label class="btn btn-outline-light btn-sm" for="bntcheck-light">Light</label>
+              <input type="checkbox" class="btn-check" id="bntcheck-gan" name="gan" autocomplete="off" checked>
+              <label class="btn btn-outline-light btn-sm" for="bntcheck-gan">GAN</label>
             </div>
           </p>
+          <div class="btn-group" role="group" aria-label="Basic radio toggle button group">
+            <input type="radio" class="btn-check" name="scale" value="2" id="scale2" autocomplete="off" checked>
+            <label class="btn btn-outline-light btn-sm" for="scale2">X2</label>
+
+            <input type="radio" class="btn-check" name="scale" id="scale4" value="4" autocomplete="off">
+            <label class="btn btn-outline-light btn-sm" for="scale4">X4</label>
+          </div>
           <input type="file" id="file-btn" style="display: none" accept="image/*" name="pic" multiple
             onchange="UploadPic()">
         </form>

@@ -52,6 +52,7 @@ def upload():
     os.makedirs(data_path)
     os.makedirs(img_path)
     opt = request.form
+    print(opt)
     count = 0
     filename = []
     for file in request.files.getlist('pic'):
@@ -69,9 +70,11 @@ def upload():
         'opt': {
             'enhancement': opt.get('enhancement'),
             'ensemble': opt.get('ensemble'),
-            'light': opt.get('light'),
+            'gan': opt.get('gan'),
+            'scale': int(opt.get('scale')),
         },
     }
+    print(info)
     with open(
         os.path.join(app.config['DATA_PATH'], task_handle, 'info.json'), 'w'
     ) as f:
@@ -97,6 +100,7 @@ def upload():
 
     f = SR(task_handle, app.config['DATA_PATH'])
     pool.apply_async(f)
+    # f()
     ret = jsonify(ret)
     ret.set_cookie('TASKHANDLE', task_handle)
     return ret

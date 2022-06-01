@@ -3,13 +3,14 @@ import os
 from turtle import forward
 
 import imageio
+import numpy as np
 import torch
 import yaml
 from basicsr.models import build_model
 from basicsr.utils.options import ordered_yaml
 
-from process import Process
 from enhancement import HazeRemoval
+from process import Process
 
 
 def add_clear(fun):
@@ -41,7 +42,9 @@ class PredData(torch.utils.data.Dataset):
         img = imageio.imread(self.imgs[i])
         if img.shape[-1] == 4:
             img = img[:, :, :3]
-        img = torch.from_numpy(img).to(self.device).permute(2, 0, 1) / 255.0
+        img = (
+            torch.from_numpy(img).to(self.device).permute(2, 0, 1).unsqueeze(0) / 255.0
+        )
         return img
 
     def get_img_name(self, i):
@@ -58,9 +61,22 @@ class SR(Process):
     def __del__(self):
         torch.cuda.empty_cache()
 
-    def _LoadModel(self, info):
-        with open('arch/test_TZ_x2_UW.yml', mode='r') as f:
-            self.opt = yaml.load(f, Loader=ordered_yaml()[0])
+    def _LoadModel(self):
+        if self.info['opt']['scale'] == 4:
+            if self.info['opt']['gan']:
+                with open('arch/FRSN_x4_UW_GAN.yml', mode='r') as f:
+                    self.opt = yaml.load(f, Loader=ordered_yaml()[0])
+            else:
+                with open('arch/FRSN_x4_UW.yml', mode='r') as f:
+                    self.opt = yaml.load(f, Loader=ordered_yaml()[0])
+        else:
+            if self.info['opt']['gan']:
+                with open('arch/FRSN_x2_UW_GAN.yml', mode='r') as f:
+                    self.opt = yaml.load(f, Loader=ordered_yaml()[0])
+            else:
+                with open('arch/FRSN_x2_UW.yml', mode='r') as f:
+                    self.opt = yaml.load(f, Loader=ordered_yaml()[0])
+
         self.opt['is_train'] = False
         self.opt['dist'] = False
         self.model = build_model(self.opt)
@@ -71,8 +87,34 @@ class SR(Process):
         if self.info['opt']['enhancement']:
             hr = HazeRemoval()
 
+        # self._LoadModel()
+        # self.device = torch.device('cuda' if self.opt['num_gpu'] != 0 else 'cpu')
+        # data = PredData(
+        #     os.path.join(self.data_path, self.handle, 'upload'), self.device
+        # )
+
+        # for i, img in enumerate(data):
+        #     if self.info['opt']['ensemble']:
+        #         out = (
+        #             self.forward_x8(img, forward_function=self.model.net_g) * 255
+        #         )
+        #     else:
+        #         with torch.no_grad():
+        #             out = self.model.net_g(img) * 255.0
+        #     # out = out.type(torch.uint8)
+        #     out = out.squeeze(0).permute(1, 2, 0).detach().cpu().numpy()
+        #     torch.cuda.empty_cache()
+        #     if self.info['opt']['enhancement']:
+        #         out = hr.get(out)
+        #     imageio.imwrite(
+        #         os.path.join(self.tmp_path, self.handle, data.get_img_name(i)), out
+        #     )
+
+        #     self.status['FinishImg'] = i + 1
+        #     self._WriteStatus()
+
         try:
-            self._LoadModel(self.info)
+            self._LoadModel()
             self.device = torch.device('cuda' if self.opt['num_gpu'] != 0 else 'cpu')
             data = PredData(
                 os.path.join(self.data_path, self.handle, 'upload'), self.device
@@ -80,11 +122,10 @@ class SR(Process):
 
             for i, img in enumerate(data):
                 if self.info['opt']['ensemble']:
-                    out = (
-                        self.forward_x8(img, forward_function=self.net_g.forward) * 255
-                    )
+                    out = self.forward_x8(img, forward_function=self.model.net_g) * 255
                 else:
-                    out = self.model.net_g(img) * 255.0
+                    with torch.no_grad():
+                        out = self.model.net_g(img) * 255.0
                 # out = out.type(torch.uint8)
                 out = out.squeeze(0).permute(1, 2, 0).detach().cpu().numpy()
                 torch.cuda.empty_cache()
@@ -130,7 +171,8 @@ class SR(Process):
 
         list_y = []
         for x in zip(*list_x):
-            y = forward_function(*x)
+            with torch.no_grad():
+                y = forward_function(*x)
             if not isinstance(y, list):
                 y = [y]
             if not list_y:
